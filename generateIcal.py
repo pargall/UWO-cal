@@ -1,7 +1,11 @@
 import requests
 import icalendar
+import sys
 from datetime import date
 from lxml import html
+
+reload(sys);
+sys.setdefaultencoding("utf8") #Page uses UTF
 
 class Course:
 	name = ""
@@ -12,7 +16,9 @@ class Course:
 
 class Section:
 	name =""
-	times = []
+	location = ""
+	startTime = 0
+	endTime =0
 	startDate = date.today()
 	endDate = date.today()
 
@@ -50,14 +56,25 @@ for course in courses:
 	sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
 
 	#print sections
-
+	typeClass  = ""
 	for s in sections:
-		col = s.xpath("descendant::td/div/span")
-		for c in col:
-			try:
-				print c.text
-			except Exception, e:
-				pass			
+		currentSection = Section()
+
+		col = s.xpath("descendant::span[@class = 'PSEDITBOX_DISPONLY']")
+
+		#We only want to grab the type of class because of the way the table is rendered
+		if col[1].text.strip() != "":
+			typeClass  = col[1].text
+		print typeClass
+
+		#Get The times
+		print col[len(col)-3].text
+
+		#get the Date
+		print col[len(col)-1].text
+
+		#get Location
+		print col[len(col)-2].text
 	#print name[0].text
 
 #print courses
