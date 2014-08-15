@@ -1,5 +1,7 @@
 import requests
+from icalendar import Calendar, Event
 import icalendar
+import pytz
 import sys
 import datetime
 from lxml import html
@@ -13,7 +15,7 @@ class Course:
 
 	def __init__(self, n):
 		self.name = n
-		sections = []
+		self.sections = []
 
 class Section:
 	name =""
@@ -48,6 +50,7 @@ def uwoDaytoWeekDay(day):
 courseList = []
 userName = "PARGALL2"
 password = '***'
+EST = pytz.timezone('US/Eastern')
 
 LoginURL = 'https://student.uwo.ca/psp/heprdweb/EMPLOYEE/HRMS/c/UWO_WISG.WSA_STDNT_CENTER.GBL&languageCd=ENG';
 schedURL = 'https://student.uwo.ca/psc/heprdweb/EMPLOYEE/HRMS/c/SA_LEARNER_SERVICES.SSR_SSENRL_LIST.GBL';
@@ -74,8 +77,7 @@ for course in courses:
 	#Get the course title
 	name = course.xpath("descendant::td[@class = 'PAGROUPDIVIDER']")
 	#print name[0].text
-	c = Course(name[0].text) 
-
+	c = Course(name[0].text)
 	#Find the sections we're signed uo for
 	sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
 
@@ -113,21 +115,74 @@ for course in courses:
 			else:
 				endTime = times[13:20]
 		startTime = datetime.datetime.strptime(startTime, "%I:%M%p")
-		endTime = datetime.datetime.strptime(endTime, "%I:%M%p");
-		
+		startTime = EST.localize(startTime)
+		endTime = datetime.datetime.strptime(endTime, "%I:%M%p")
+		endTime = EST.localize(endTime)
 		#adjust the start day to line up with the day the course starts(rather the when the term starts)
 		while (startDate.isoweekday() != day):
 			startDate = startDate + datetime.timedelta(days=1)
 
 		#Figure out the DateTime of the course
-		startDateTime = startDate + (startTime - datetime.datetime(1900, 1, 1))
+		zeroed = datetime.datetime(1900, 1, 1)
+		zeroed = EST.localize(zeroed)
+		startDateTime = startDate + (startTime - zeroed)
+		startDateTime = EST.localize(startDateTime)
 		endDateTime = startDateTime + (endTime-startTime)
-
 		#get Location
 		location = col[len(col)-2].text
-
-
 		c.sections.append(Section(typeClass, location, startDateTime, endDateTime, recurEndDate))
-
 	courseList.append(c)
-	#print name[0].text
+
+# Start building the calendar
+cal = Calendar()
+
+#Required to be complient with th RFC
+cal.add('prodid', '-//pargall//UWO Class Calendar//EN')
+cal.add('version', '2.0')
+
+tzc = icalendar.Timezone()
+tzc.add('tzid', 'US/Eastern')
+tzc.add('x-lic-location', 'Europe/Eastern')
+
+tzs = icalendar.TimezoneStandard()
+tzs.add('tzname', 'EST')
+tzs.add('dtstart', datetime.datetime(1970, 10, 25, 3, 0, 0))
+tzs.add('rrule', {'freq': 'yearly', 'bymonth': 10, 'byday': '-1su'})
+tzs.add('TZOFFSETFROM', datetime.timedelta(hours=-5))
+tzs.add('TZOFFSETTO', datetime.timedelta(hours=-4))
+
+tzd = icalendar.TimezoneDaylight()
+tzd.add('tzname', 'EDT')
+tzd.add('dtstart', datetime.datetime(1970, 3, 29, 2, 0, 0))
+tzs.add('rrule', {'freq': 'yearly', 'bymonth': 3, 'byday': '-1su'})
+tzd.add('TZOFFSETFROM', datetime.timedelta(hours=-4))
+tzd.add('TZOFFSETTO', datetime.timedelta(hours=-5))
+
+tzc.add_component(tzs)
+tzc.add_component(tzd)
+cal.add_component(tzc)
+
+for course in courseList:
+	print course.name
+	for section in course.sections:
+		print section.name," ", section.startDateTime, " to ", section.endDateTime
+		event = Event()
+		event.add('uid', course.name+section.startDateTime.isoformat()+userName+"@uwo.ca")
+		event.add('summary', course.name + ": " + section.name)
+		event.add('location', section.location)
+		
+		#event['dtstart'] =  icalendar.vDatetime(section.startDateTime).to_ical()
+		#event['dtend'] =  icalendar.vDatetime(section.endDateTime).to_ical()
+		#event['dtstamp'] =  icalendar.vDatetime(datetime.datetime.utcnow()).to_ical()
+
+		event.add('dtstart', section.startDateTime)
+		event.add('dtend', section.endDateTime)
+		event.add('dtstamp', datetime.datetime.utcnow())
+		cal.add_component(event)
+
+import tempfile, os
+directory = tempfile.mkdtemp()
+print directory
+f = open(os.path.join(directory, 'example.ics'), 'wb')
+f.write(cal.to_ical())
+f.close()
