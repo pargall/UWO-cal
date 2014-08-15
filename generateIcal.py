@@ -170,12 +170,9 @@ for course in courseList:
 		event.add('uid', course.name+section.startDateTime.isoformat()+userName+"@uwo.ca")
 		event.add('summary', course.name + ": " + section.name)
 		event.add('location', section.location)
-		
-		#event['dtstart'] =  icalendar.vDatetime(section.startDateTime).to_ical()
-		#event['dtend'] =  icalendar.vDatetime(section.endDateTime).to_ical()
-		#event['dtstamp'] =  icalendar.vDatetime(datetime.datetime.utcnow()).to_ical()
 
 		event.add('dtstart', section.startDateTime)
+		event.add('rrule', {'freq': 'weekly', 'until': section.lastClass})
 		event.add('dtend', section.endDateTime)
 		event.add('dtstamp', datetime.datetime.utcnow())
 		cal.add_component(event)
