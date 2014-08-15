@@ -77,7 +77,7 @@ courses = tree.xpath("//div[starts-with(@id,'win0divDERIVED_REGFRM1_DESCR20$')]"
 for course in courses:
 	#Get the course title
 	name = course.xpath("descendant::td[@class = 'PAGROUPDIVIDER']")
-	#print name[0].text
+
 	c = Course(name[0].text)
 	#Find the sections we're signed uo for
 	sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
@@ -164,9 +164,7 @@ tzc.add_component(tzd)
 cal.add_component(tzc)
 
 for course in courseList:
-	print course.name
 	for section in course.sections:
-		print section.name," ", section.startDateTime, " to ", section.endDateTime
 		event = Event()
 		event.add('uid', course.name+section.startDateTime.isoformat()+userName+"@uwo.ca")
 		event.add('summary', course.name + ": " + section.name)
@@ -180,7 +178,7 @@ for course in courseList:
 
 import tempfile, os
 directory = tempfile.mkdtemp()
-print directory
-f = open(os.path.join(directory, 'example.ics'), 'wb')
+f = open(os.path.join(directory, userName+'_classes.ics'), 'wb')
 f.write(cal.to_ical())
+print "Your calendar: " + f.name
 f.close()
