@@ -5,6 +5,7 @@ import pytz
 import sys
 import datetime
 from lxml import html
+import getpass
 
 reload(sys);
 sys.setdefaultencoding("utf8") #Page uses UTF
@@ -48,8 +49,8 @@ def uwoDaytoWeekDay(day):
 		return 5
 
 courseList = []
-userName = "PARGALL2"
-password = '***'
+userName = raw_input('Enter your uwo username: ')
+password = getpass.getpass()
 EST = pytz.timezone('US/Eastern')
 
 LoginURL = 'https://student.uwo.ca/psp/heprdweb/EMPLOYEE/HRMS/c/UWO_WISG.WSA_STDNT_CENTER.GBL&languageCd=ENG';
