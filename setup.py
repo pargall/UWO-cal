@@ -5,8 +5,8 @@ setup(
     author='Peter Argall',
     author_email='peter@argall.ca',
     url='https://github.com/pargall/UWO-Cal',
-    version='1.0.0',
-    packages=['uwo-calendar',],
+    version='1.0.3',
+    packages=['uwoCalendar',],
     license='LICENSE.txt',
     long_description=open('README.txt').read(),
     install_requires=[
