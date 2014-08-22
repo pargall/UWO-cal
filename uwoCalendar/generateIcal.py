@@ -12,10 +12,12 @@ sys.setdefaultencoding("utf8") #Page uses UTF
 
 class Course:
 	name = ""
+	code = ""
 	sections = []
 
-	def __init__(self, n):
+	def __init__(self, n, c):
 		self.name = n
+		self.code = c
 		self.sections = []
 
 class Section:
@@ -78,7 +80,8 @@ for course in courses:
 	#Get the course title
 	name = course.xpath("descendant::td[@class = 'PAGROUPDIVIDER']")
 
-	c = Course(name[0].text)
+	dashLoc = name[0].text.find('-')
+	c = Course(name[0].text[dashLoc+2:].title(), name[0].text[:dashLoc])
 	#Find the sections we're signed uo for
 	sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
 
@@ -167,7 +170,8 @@ for course in courseList:
 	for section in course.sections:
 		event = Event()
 		event.add('uid', course.name+section.startDateTime.isoformat()+userName+"@uwo.ca")
-		event.add('summary', course.name + ": " + section.name)
+		event.add('summary', section.name + ": " + course.name)
+		event.add('description', course.code)
 		event.add('location', section.location)
 
 		event.add('dtstart', section.startDateTime)
