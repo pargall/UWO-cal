@@ -6,7 +6,7 @@ setup(
     author_email='peter@argall.ca',
     description='Python script that grabs your schedule from student.uwo.ca and creates a handy ics file',
     url='https://github.com/pargall/UWO-Cal',
-    version='3.0.0',
+    version='3.0.1',
     packages=['uwoCalendar',],
     license='LICENSE.txt',
     long_description=open('README.txt').read(),
