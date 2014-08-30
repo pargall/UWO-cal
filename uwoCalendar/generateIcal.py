@@ -50,139 +50,160 @@ def uwoDaytoWeekDay(day):
 	elif day == "Fr":
 		return 5
 
-courseList = []
-userName = raw_input('Enter your uwo username: ')
-password = getpass.getpass()
-EST = pytz.timezone('US/Eastern')
+def getScheduleHTML(userName, password):
+	LoginURL = 'https://student.uwo.ca/psp/heprdweb/EMPLOYEE/HRMS/c/UWO_WISG.WSA_STDNT_CENTER.GBL&languageCd=ENG';
+	schedURL = 'https://student.uwo.ca/psc/heprdweb/EMPLOYEE/HRMS/c/SA_LEARNER_SERVICES.SSR_SSENRL_LIST.GBL';
 
-LoginURL = 'https://student.uwo.ca/psp/heprdweb/EMPLOYEE/HRMS/c/UWO_WISG.WSA_STDNT_CENTER.GBL&languageCd=ENG';
-schedURL = 'https://student.uwo.ca/psc/heprdweb/EMPLOYEE/HRMS/c/SA_LEARNER_SERVICES.SSR_SSENRL_LIST.GBL';
+	#These are the post varible the web form sends
+	payload = {'httpPort2' : '',		
+			'timezoneOffset2':0,
+			'userid':userName.upper(),	#Server expect the username in uppercase for some reason
+			'pwd':password,
+			'Submit':'Sign In'}
 
-payload = {'httpPort2' : '',
-		'timezoneOffset2':0,
-		'userid':userName.upper(),
-		'pwd':password,
-		'Submit':'Sign In'}
-s = requests.Session();
+	s = requests.Session(); #this creates a session that will keep track of cookies across requests
 
-#login in
-s.post(LoginURL, params=payload);
+	#login in
+	s.post(LoginURL, params=payload);
 
-#get Sched
-r = s.post(schedURL, {'Page':'SSR_SSENRL_LIST'})
+	#get Sched
+	r = s.post(schedURL, {'Page':'SSR_SSENRL_LIST'})
 
+	return r.text
 
-tree = html.fromstring(r.text)
-courses = tree.xpath("//div[starts-with(@id,'win0divDERIVED_REGFRM1_DESCR20$')]")
+def parseSchedule(schedHTML):
+	courseList = []
+	EST = pytz.timezone('US/Eastern')
 
-#Parse the raw HTML into objects
-for course in courses:
-	#Get the course title
-	name = course.xpath("descendant::td[@class = 'PAGROUPDIVIDER']")
+	
+	tree = html.fromstring(schedHTML)
+	courses = tree.xpath("//div[starts-with(@id,'win0divDERIVED_REGFRM1_DESCR20$')]")
 
-	dashLoc = name[0].text.find('-')
-	c = Course(name[0].text[dashLoc+2:].title(), name[0].text[:dashLoc])
-	#Find the sections we're signed uo for
-	sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
+	#Parse the raw HTML into objects
+	for course in courses:
+		#Get the course title
+		name = course.xpath("descendant::td[@class = 'PAGROUPDIVIDER']")
 
-	typeClass  = ""
-	for s in sections:
-		col = s.xpath("descendant::span[@class = 'PSEDITBOX_DISPONLY']")
-
-		#We only want to grab the type of class because of the way the table is rendered
-		if col[1].text.strip() != "":
-			typeClass  = col[1].text
-
-		#get the Date
-		#Note this is the start and end date of the term, not the course 
-		startDate = datetime.datetime.strptime(col[len(col)-1].text[0:10], "%Y/%m/%d")
+		dashLoc = name[0].text.find('-')
+		c = Course(name[0].text[dashLoc+2:].title(), name[0].text[:dashLoc])
 		
-		recurEndDate = datetime.datetime.strptime(col[len(col)-1].text[13:23], "%Y/%m/%d")
+		#Find the sections we're signed up for
+		sections =  course.xpath("descendant::tr[starts-with(@id,'trCLASS_MTG_VW$')]")
 
-		#Get The times
-		times = col[len(col)-3].text;
+		typeClass  = ""
+		for s in sections:
+			col = s.xpath("descendant::span[@class = 'PSEDITBOX_DISPONLY']")
 
-		#Get the day of the week
-		day = uwoDaytoWeekDay(times[0:2])
-		
-		#Check to see if the start times hour is 1 digit and pad it
-		if(times[4] == ':'):
-			startTime = '0' + times[3:9];
-			if(times[13] == ':'):
-				endTime = '0' + times[12:18]
+			#We only want to grab the type of class if there is one, otherwise its the same as the last row
+			if col[1].text.strip() != "":
+				typeClass  = col[1].text
+			
+			#This the start and end date of the term, not the course 
+			startDate = datetime.datetime.strptime(col[len(col)-1].text[0:10], "%Y/%m/%d")
+			
+			recurEndDate = datetime.datetime.strptime(col[len(col)-1].text[13:23], "%Y/%m/%d")
+
+			#Get The times
+			times = col[len(col)-3].text;
+
+			#Get the day of the week
+			day = uwoDaytoWeekDay(times[0:2])
+			
+			#Check to see if the start times hour is 1 digit and pad it
+			if(times[4] == ':'):
+				startTime = '0' + times[3:9];
+				if(times[13] == ':'):
+					endTime = '0' + times[12:18]
+				else:
+					endTime = times[12:19]
 			else:
-				endTime = times[12:19]
-		else:
-			startTime = times[3:10];
-			if(times[14] == ':'):
-				endTime = '0' + times[13:19]
-			else:
-				endTime = times[13:20]
-		startTime = datetime.datetime.strptime(startTime, "%I:%M%p")
-		startTime = EST.localize(startTime)
-		endTime = datetime.datetime.strptime(endTime, "%I:%M%p")
-		endTime = EST.localize(endTime)
-		#adjust the start day to line up with the day the course starts(rather the when the term starts)
-		while (startDate.isoweekday() != day):
-			startDate = startDate + datetime.timedelta(days=1)
+				startTime = times[3:10];
+				if(times[14] == ':'):
+					endTime = '0' + times[13:19]
+				else:
+					endTime = times[13:20]
 
-		#Figure out the DateTime of the course
-		zeroed = datetime.datetime(1900, 1, 1)
-		zeroed = EST.localize(zeroed)
-		startDateTime = startDate + (startTime - zeroed)
-		startDateTime = EST.localize(startDateTime)
-		endDateTime = startDateTime + (endTime-startTime)
-		#get Location
-		location = col[len(col)-2].text
-		c.sections.append(Section(typeClass, location, startDateTime, endDateTime, recurEndDate))
-	courseList.append(c)
+			startTime = datetime.datetime.strptime(startTime, "%I:%M%p")
+			startTime = EST.localize(startTime)
+			endTime = datetime.datetime.strptime(endTime, "%I:%M%p")
+			endTime = EST.localize(endTime)
+			#adjust the start day to line up with the day the course starts(rather the when the term starts)
+			while (startDate.isoweekday() != day):
+				startDate = startDate + datetime.timedelta(days=1)
 
-# Start building the calendar
-cal = Calendar()
+			#Figure out the DateTime of the course
+			zeroed = EST.localize(datetime.datetime(1900, 1, 1))
 
-#Required to be complient with th RFC
-cal.add('prodid', '-//pargall//UWO Class Calendar//EN')
-cal.add('version', '2.0')
+			startDateTime = startDate + (startTime - zeroed)
+			startDateTime = EST.localize(startDateTime)
+			endDateTime = startDateTime + (endTime-startTime)
 
-tzc = icalendar.Timezone()
-tzc.add('tzid', 'US/Eastern')
-tzc.add('x-lic-location', 'Europe/Eastern')
+			#get Location
+			location = col[len(col)-2].text
+			c.sections.append(Section(typeClass, location, startDateTime, endDateTime, recurEndDate))
+		courseList.append(c)
+	return courseList
 
-tzs = icalendar.TimezoneStandard()
-tzs.add('tzname', 'EST')
-tzs.add('dtstart', datetime.datetime(1970, 10, 25, 3, 0, 0))
-tzs.add('rrule', {'freq': 'yearly', 'bymonth': 10, 'byday': '-1su'})
-tzs.add('TZOFFSETFROM', datetime.timedelta(hours=-5))
-tzs.add('TZOFFSETTO', datetime.timedelta(hours=-4))
+def makeICal(courseList):
+	# Start building the calendar
+	cal = Calendar()
 
-tzd = icalendar.TimezoneDaylight()
-tzd.add('tzname', 'EDT')
-tzd.add('dtstart', datetime.datetime(1970, 3, 29, 2, 0, 0))
-tzs.add('rrule', {'freq': 'yearly', 'bymonth': 3, 'byday': '-1su'})
-tzd.add('TZOFFSETFROM', datetime.timedelta(hours=-4))
-tzd.add('TZOFFSETTO', datetime.timedelta(hours=-5))
+	#Required to be complient with th RFC
+	cal.add('prodid', '-//pargall//UWO Class Calendar//EN')
+	cal.add('version', '2.0')
 
-tzc.add_component(tzs)
-tzc.add_component(tzd)
-cal.add_component(tzc)
+	tzc = icalendar.Timezone()
+	tzc.add('tzid', 'US/Eastern')
+	tzc.add('x-lic-location', 'Europe/Eastern')
 
-for course in courseList:
-	for section in course.sections:
-		event = Event()
-		event.add('uid', course.name+section.startDateTime.isoformat()+userName+"@uwo.ca")
-		event.add('summary', section.name + ": " + course.name)
-		event.add('description', course.code)
-		event.add('location', section.location)
+	#Define the timezone that UWO is in
+	tzs = icalendar.TimezoneStandard()
+	tzs.add('tzname', 'EST')
+	tzs.add('dtstart', datetime.datetime(1970, 10, 25, 3, 0, 0))
+	tzs.add('rrule', {'freq': 'yearly', 'bymonth': 10, 'byday': '-1su'})
+	tzs.add('TZOFFSETFROM', datetime.timedelta(hours=-5))
+	tzs.add('TZOFFSETTO', datetime.timedelta(hours=-4))
 
-		event.add('dtstart', section.startDateTime)
-		event.add('rrule', {'freq': 'weekly', 'until': section.lastClass})
-		event.add('dtend', section.endDateTime)
-		event.add('dtstamp', datetime.datetime.utcnow())
-		cal.add_component(event)
+	tzd = icalendar.TimezoneDaylight()
+	tzd.add('tzname', 'EDT')
+	tzd.add('dtstart', datetime.datetime(1970, 3, 29, 2, 0, 0))
+	tzs.add('rrule', {'freq': 'yearly', 'bymonth': 3, 'byday': '-1su'})
+	tzd.add('TZOFFSETFROM', datetime.timedelta(hours=-4))
+	tzd.add('TZOFFSETTO', datetime.timedelta(hours=-5))
 
-import tempfile, os
-directory = tempfile.mkdtemp()
-f = open(os.path.join(directory, userName+'_classes.ics'), 'wb')
-f.write(cal.to_ical())
-print "Your calendar: " + f.name
-f.close()
+	tzc.add_component(tzs)
+	tzc.add_component(tzd)
+	cal.add_component(tzc)
+
+	for course in courseList:
+		for section in course.sections:
+			event = Event()
+			event.add('uid', course.name+section.startDateTime.isoformat())
+			event.add('summary', section.name + ": " + course.name)
+			event.add('description', course.code)
+			event.add('location', section.location)
+
+			event.add('dtstart', section.startDateTime)
+			event.add('rrule', {'freq': 'weekly', 'until': section.lastClass})
+			event.add('dtend', section.endDateTime)
+			event.add('dtstamp', datetime.datetime.utcnow())
+			cal.add_component(event)
+	return cal
+
+def writeTempFile(cal):
+	import tempfile, os
+	directory = tempfile.mkdtemp()
+	f = open(os.path.join(directory, 'classes.ics'), 'wb')
+	f.write(cal.to_ical())
+	f.close()
+	return f.name
+
+def gen():
+	userName = raw_input('Enter your uwo username: ')
+	password = getpass.getpass()
+
+	schedHTML = getScheduleHTML(userName, password)
+	courseList = parseSchedule(schedHTML)
+	cal = makeICal(courseList)
+
+	print "Your calendar: " + writeTempFile(cal)
