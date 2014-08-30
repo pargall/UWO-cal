@@ -7,9 +7,6 @@ import datetime
 from lxml import html
 import getpass
 
-reload(sys);
-sys.setdefaultencoding("utf8") #Page uses UTF
-
 class Course:
 	name = ""
 	code = ""
@@ -199,11 +196,11 @@ def writeTempFile(cal):
 	return f.name
 
 def gen():
-	userName = raw_input('Enter your uwo username: ')
+	userName = input('Enter your uwo username: ')
 	password = getpass.getpass()
 
 	schedHTML = getScheduleHTML(userName, password)
 	courseList = parseSchedule(schedHTML)
 	cal = makeICal(courseList)
 
-	print "Your calendar: " + writeTempFile(cal)
+	print("Your calendar: " + writeTempFile(cal))
